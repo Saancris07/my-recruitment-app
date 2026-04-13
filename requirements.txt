@@ -1,0 +1,73 @@
+import streamlit as st
+import sqlite3
+import pandas as pd
+from PIL import Image
+import io
+
+# Database Setup (सधैंका लागि डाटा सेभ गर्न)
+conn = sqlite3.connect('recruitment_agency.db', check_same_thread=False)
+c = conn.cursor()
+
+def create_db():
+    c.execute('''CREATE TABLE IF NOT EXISTS candidates 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, phone TEXT, exp INTEGER, skill TEXT, photo BLOB)''')
+    conn.commit()
+
+create_db()
+
+# Page Setup
+st.set_page_config(page_title="TalentHub Pro", layout="wide")
+
+st.sidebar.title("🚀 TalentHub Pro")
+menu = st.sidebar.radio("Menu", ["Dashboard", "Add Candidate", "Database"])
+
+if menu == "Dashboard":
+    st.title("📊 Agency Dashboard")
+    data = pd.read_sql('SELECT * FROM candidates', conn)
+    
+    m1, m2 = st.columns(2)
+    m1.metric("Total Candidates", len(data))
+    
+    st.divider()
+    if not data.empty:
+        cols = st.columns(4)
+        for idx, row in data.iterrows():
+            with cols[idx % 4]:
+                if row['photo']:
+                    st.image(Image.open(io.BytesIO(row['photo'])), width=150, use_container_width=False)
+                st.write(f"**{row['name']}**")
+                st.write(f"📧 {row['email']}")
+                st.write(f"📞 {row['phone']}")
+    else:
+        st.info("No candidates saved yet. Go to 'Add Candidate' to start.")
+
+elif menu == "Add Candidate":
+    st.title("👤 New Candidate Entry")
+    with st.form("entry_form", clear_on_submit=True):
+        name = st.text_input("Full Name *")
+        email = st.text_input("Email Address *")
+        phone = st.text_input("Phone Number")
+        exp = st.number_input("Experience (Years)", 0, 40)
+        skill = st.text_input("Primary Skill")
+        photo = st.file_uploader("Candidate Photo", type=['jpg', 'png', 'jpeg'])
+        
+        if st.form_submit_button("Save to Database"):
+            if name and email:
+                img_byte_arr = None
+                if photo:
+                    img = Image.open(photo)
+                    buf = io.BytesIO()
+                    img.save(buf, format='PNG')
+                    img_byte_arr = buf.getvalue()
+                
+                c.execute('INSERT INTO candidates (name, email, phone, exp, skill, photo) VALUES (?,?,?,?,?,?)',
+                          (name, email, phone, exp, skill, img_byte_arr))
+                conn.commit()
+                st.success(f"Data for {name} saved permanently! ✅")
+            else:
+                st.error("Please fill required fields (Name and Email).")
+
+elif menu == "Database":
+    st.title("📂 All Records")
+    df = pd.read_sql('SELECT id, name, email, phone, exp, skill FROM candidates', conn)
+    st.dataframe(df, use_container_width=True)
