@@ -34,12 +34,14 @@ def password_entered():
 if check_password():
     st.set_page_config(page_title="TalentHub Ultimate", layout="wide")
     
+    # 🎨 यहाँ CSS मा सुधार गरिएको छ (Space हटाउन)
     st.markdown("""
         <style>
+        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
         .main { background-color: #f8f9fa; }
         .stMetric { background-color: white; padding: 15px; border-radius: 10px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .candidate-card { background-color: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; min-height: 200px; }
-        .section-title { color: #333; font-size: 1.1rem; font-weight: bold; margin-top: 10px; border-bottom: 2px solid #007bff; display: inline-block; padding-bottom: 3px; }
+        .candidate-card { background-color: white; padding: 5px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
+        .section-title { color: #333; font-size: 1.1rem; font-weight: bold; margin-top: 0px; margin-bottom: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -47,38 +49,19 @@ if check_password():
     menu = st.sidebar.radio("मुख्य मेनु", ["📊 Dashboard", "💼 Jobs", "👤 Candidates", "🎯 Hiring", "⚙️ Settings"])
 
     if menu == "📊 Dashboard":
-        st.title("📈 Recruitment Overview")
         cands_df = pd.read_sql('SELECT * FROM candidates', conn)
         hires_df = pd.read_sql('SELECT * FROM hires', conn)
         jobs_df = pd.read_sql('SELECT * FROM jobs', conn)
         
+        # Row 1: Quick Stats (माथि सानो पारेर राखिएको)
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("👥 Total Talent", len(cands_df))
         m2.metric("💼 Total Jobs", len(jobs_df))
         m3.metric("🎯 Total Hires", len(hires_df))
-        m4.metric("📈 Status", "Active")
+        m4.metric("📈 Status", "Live")
 
-        st.divider()
-        
-        # Small & Professional Bar Chart
-        col_chart, col_info = st.columns([2, 1])
-        with col_chart:
-            st.markdown("<p class='section-title'>📊 Candidate Experience (Yrs)</p>", unsafe_allow_html=True)
-            if not cands_df.empty:
-                fig = px.bar(cands_df, x='name', y='exp', color='skill', height=230, template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False, xaxis_title=None, yaxis_title=None)
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            else:
-                st.info("No data available.")
-        
-        with col_info:
-            st.markdown("<p class='section-title'>🔔 Latest Updates</p>", unsafe_allow_html=True)
-            if not hires_df.empty:
-                st.write(f"✅ **Latest Hire:** {hires_df['candidate_name'].iloc[-1]}")
-            st.write(f"🏢 **Jobs Available:** {len(jobs_df)}")
-
-        st.divider()
         st.markdown("<p class='section-title'>👥 Talent Pool Gallery</p>", unsafe_allow_html=True)
+        
         if not cands_df.empty:
             cols = st.columns(6)
             for idx, row in cands_df.iterrows():
@@ -89,7 +72,21 @@ if check_password():
                     st.write(f"**{row['name']}**")
                     st.caption(f"🎯 {row['skill']}")
                     st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("No candidates available.")
 
+        st.divider()
+
+        # Row 2: Bar Chart (तल सानो बनाएर राखिएको)
+        col_chart, _ = st.columns([1, 1])
+        with col_chart:
+            st.markdown("<p class='section-title'>📊 Candidate Experience (Yrs)</p>", unsafe_allow_html=True)
+            if not cands_df.empty:
+                fig = px.bar(cands_df, x='name', y='exp', color='skill', height=200, template="plotly_white")
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # (Jobs, Candidates, Hiring Sections remain same)
     elif menu == "💼 Jobs":
         st.title("💼 Manage Jobs")
         with st.form("j"):
