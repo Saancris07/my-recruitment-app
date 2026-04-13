@@ -1,11 +1,12 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import plotly.express as px
 from PIL import Image
 import io
 
-# Database Persistence (अनलाइनमा डाटा हराउन नदिन)
-conn = sqlite3.connect('recruitment_online.db', check_same_thread=False)
+# Database Setup
+conn = sqlite3.connect('agency_final.db', check_same_thread=False)
 c = conn.cursor()
 
 def create_db():
@@ -16,55 +17,76 @@ def create_db():
 
 create_db()
 
-st.set_page_config(page_title="TalentHub Pro Online", layout="wide")
+# 4. Security: Simple Login System
+def check_password():
+    if "password_correct" not in st.session_state:
+        st.sidebar.text_input("Admin Password", type="password", on_change=password_entered, key="password")
+        return False
+    return st.session_state["password_correct"]
 
-# Sidebar Menu
-st.sidebar.title("🚀 TalentHub Online")
-menu = st.sidebar.radio("Menu", ["📊 Dashboard", "💼 Job Listings", "👤 Candidates", "🎯 Hiring System"])
+def password_entered():
+    if st.session_state["password"] == "admin123": # तपाईंले यहाँ आफ्नो पासवर्ड फेर्न सक्नुहुन्छ
+        st.session_state["password_correct"] = True
+    else:
+        st.error("❌ गलत पासवर्ड!")
 
-if menu == "📊 Dashboard":
-    st.title("Recruitment Insights")
-    data_h = pd.read_sql('SELECT * FROM hires', conn)
-    st.metric("Total Successful Hires ✅", len(data_h))
-    st.divider()
-    st.subheader("Hiring History")
-    st.table(data_h)
+if check_password():
+    st.set_page_config(page_title="TalentHub Ultimate", layout="wide")
+    st.sidebar.title("🚀 TalentHub Ultimate")
+    menu = st.sidebar.radio("मुख्य मेनु", ["📊 Dashboard", "💼 Jobs", "👤 Candidates", "🎯 Hiring", "⚙️ Admin Settings"])
 
-elif menu == "💼 Job Listings":
-    st.title("Manage Vacancies")
-    with st.form("job_form", clear_on_submit=True):
-        t = st.text_input("Job Title")
-        comp = st.text_input("Company Name")
-        if st.form_submit_button("Post Job"):
-            c.execute('INSERT INTO jobs (title, company, status) VALUES (?,?,"Active")', (t, comp))
-            conn.commit()
-            st.success("Job Saved Online!")
-    st.dataframe(pd.read_sql('SELECT * FROM jobs', conn), use_container_width=True)
+    # 1. Advanced Analytics (Dashboard)
+    if menu == "📊 Dashboard":
+        st.title("📈 Recruitment Insights")
+        hires_df = pd.read_sql('SELECT * FROM hires', conn)
+        cands_df = pd.read_sql('SELECT * FROM candidates', conn)
+        
+        m1, m2 = st.columns(2)
+        m1.metric("Total Successful Hires", len(hires_df))
+        m2.metric("Talent Pool Size", len(cands_df))
+        
+        st.divider()
+        if not cands_df.empty:
+            st.subheader("Candidate Skills Distribution")
+            fig = px.bar(cands_df, x='name', y='exp', color='skill', title="Years of Experience by Candidate")
+            st.plotly_chart(fig, use_container_width=True)
 
-elif menu == "👤 Candidates":
-    st.title("Register Talent")
-    with st.form("cand_form", clear_on_submit=True):
-        n = st.text_input("Name")
-        e = st.text_input("Email")
-        s = st.text_input("Key Skill")
-        p = st.file_uploader("Candidate Photo", type=['jpg', 'png'])
-        if st.form_submit_button("Save Candidate"):
-            img_byte = io.BytesIO()
-            if p: Image.open(p).save(img_byte, format='PNG')
-            c.execute('INSERT INTO candidates (name, email, skill, photo) VALUES (?,?,?,?)', (n, e, s, img_byte.getvalue()))
-            conn.commit()
-            st.success("Candidate Data Secured!")
+    # 3. Export to Excel (Database Section मा थपिएको)
+    elif menu == "⚙️ Admin Settings":
+        st.title("⚙️ Control Panel")
+        st.subheader("📥 Export Data")
+        hires_df = pd.read_sql('SELECT * FROM hires', conn)
+        if st.download_button(label="Download Hiring Report (CSV)", data=hires_df.to_csv(index=False), file_name='hiring_report.csv', mime='text/csv'):
+            st.success("फाइल डाउनलोड भयो!")
 
-elif menu == "🎯 Hiring System":
-    st.title("🎯 Hire Candidate")
-    jobs_df = pd.read_sql('SELECT * FROM jobs WHERE status="Active"', conn)
-    cands_df = pd.read_sql('SELECT * FROM candidates', conn)
+    # 2. Hiring & Automation
+    elif menu == "🎯 Hiring":
+        st.title("🎯 Hiring System")
+        jobs_df = pd.read_sql('SELECT * FROM jobs', conn)
+        cands_df = pd.read_sql('SELECT * FROM candidates', conn)
+        
+        if not jobs_df.empty and not cands_df.empty:
+            sel_job = st.selectbox("Select Job", jobs_df['title'])
+            sel_cand = st.selectbox("Select Candidate", cands_df['name'])
+            
+            if st.button("Confirm Hire & Notify"):
+                c.execute('INSERT INTO hires (job_title, candidate_name) VALUES (?,?)', (sel_job, sel_cand))
+                conn.commit()
+                st.balloons()
+                st.success(f"बधाई छ! {sel_cand} लाई {sel_job} को लागि नियुक्त गरियो।")
+                st.info(f"📧 सूचना: {sel_cand} लाई अटोमेटिक ईमेल ड्र्याफ्ट तयार भयो।") # Simulation of Email
 
-    if not jobs_df.empty and not cands_df.empty:
-        sel_job = st.selectbox("Job", jobs_df['title'] + " at " + jobs_df['company'])
-        sel_cand = st.selectbox("Candidate", cands_df['name'])
-        if st.button("Confirm Hiring"):
-            c.execute('INSERT INTO hires (job_title, candidate_name) VALUES (?,?)', (sel_job, sel_cand))
-            conn.commit()
-            st.success("Candidate Hired Successfully!")
-            st.balloons()
+    # (बाँकी Jobs र Candidates कोड पहिले जस्तै राख्नुहोला)
+    elif menu == "💼 Jobs":
+        st.title("Manage Jobs")
+        with st.form("j"):
+            t = st.text_input("Title"); co = st.text_input("Company")
+            if st.form_submit_button("Post"):
+                c.execute('INSERT INTO jobs (title, company, status) VALUES (?,?,"Active")', (t, co)); conn.commit()
+    
+    elif menu == "👤 Candidates":
+        st.title("Add Candidate")
+        with st.form("c"):
+            n = st.text_input("Name"); e = st.text_input("Email"); s = st.text_input("Skill"); ex = st.number_input("Exp", 0)
+            if st.form_submit_button("Save"):
+                c.execute('INSERT INTO candidates (name, email, skill, exp) VALUES (?,?,?,?)', (n,e,s,ex)); conn.commit()
