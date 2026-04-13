@@ -32,16 +32,20 @@ def password_entered():
         st.error("❌ गलत पासवर्ड!")
 
 if check_password():
-    st.set_page_config(page_title="TalentHub Ultimate", layout="wide")
+    # 🎨 यहाँ CSS सुधार गरिएको छ (Header हटाउन र मेट्रिक्स मिलाउन)
+    st.set_page_config(page_title="TalentHub Pro", layout="wide", initial_sidebar_state="expanded")
     
-    # 🎨 यहाँ CSS मा सुधार गरिएको छ (Space हटाउन)
     st.markdown("""
         <style>
-        .block-container { padding-top: 1rem; padding-bottom: 0rem; }
+        /* माथिको खाली भाग हटाउन */
+        .block-container { padding-top: 0rem !important; padding-bottom: 0rem !important; }
+        header { visibility: hidden; }
+        footer { visibility: hidden; }
+        
         .main { background-color: #f8f9fa; }
-        .stMetric { background-color: white; padding: 15px; border-radius: 10px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .candidate-card { background-color: white; padding: 5px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
-        .section-title { color: #333; font-size: 1.1rem; font-weight: bold; margin-top: 0px; margin-bottom: 10px; }
+        .stMetric { background-color: white; padding: 10px 15px; border-radius: 10px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .candidate-card { background-color: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
+        .section-title { color: #333; font-size: 1rem; font-weight: bold; margin-bottom: 10px; padding-left: 5px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -53,14 +57,15 @@ if check_password():
         hires_df = pd.read_sql('SELECT * FROM hires', conn)
         jobs_df = pd.read_sql('SELECT * FROM jobs', conn)
         
-        # Row 1: Quick Stats (माथि सानो पारेर राखिएको)
+        # Row 1: Quick Stats
+        st.write("") # सानो स्पेस
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("👥 Total Talent", len(cands_df))
         m2.metric("💼 Total Jobs", len(jobs_df))
         m3.metric("🎯 Total Hires", len(hires_df))
         m4.metric("📈 Status", "Live")
 
-        st.markdown("<p class='section-title'>👥 Talent Pool Gallery</p>", unsafe_allow_html=True)
+        st.markdown("<p class='section-title'>👤 Talent Pool Gallery</p>", unsafe_allow_html=True)
         
         if not cands_df.empty:
             cols = st.columns(6)
@@ -77,16 +82,16 @@ if check_password():
 
         st.divider()
 
-        # Row 2: Bar Chart (तल सानो बनाएर राखिएको)
-        col_chart, _ = st.columns([1, 1])
+        # Row 2: Bar Chart
+        col_chart, _ = st.columns([2, 1])
         with col_chart:
-            st.markdown("<p class='section-title'>📊 Candidate Experience (Yrs)</p>", unsafe_allow_html=True)
+            st.markdown("<p class='section-title'>📊 Experience Distribution (Yrs)</p>", unsafe_allow_html=True)
             if not cands_df.empty:
                 fig = px.bar(cands_df, x='name', y='exp', color='skill', height=200, template="plotly_white")
-                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+                fig.update_layout(margin=dict(l=5, r=5, t=5, b=5), showlegend=False)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # (Jobs, Candidates, Hiring Sections remain same)
+    # Jobs, Candidates, Hiring Sections (पहिलेकै जस्तै)
     elif menu == "💼 Jobs":
         st.title("💼 Manage Jobs")
         with st.form("j"):
