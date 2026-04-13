@@ -34,13 +34,12 @@ def password_entered():
 if check_password():
     st.set_page_config(page_title="TalentHub Ultimate", layout="wide")
     
-    # Custom CSS for Professional Look
     st.markdown("""
         <style>
         .main { background-color: #f8f9fa; }
         .stMetric { background-color: white; padding: 15px; border-radius: 10px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .candidate-card { background-color: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
-        .section-title { color: #333; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
+        .candidate-card { background-color: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; min-height: 200px; }
+        .section-title { color: #333; font-size: 1.1rem; font-weight: bold; margin-top: 10px; border-bottom: 2px solid #007bff; display: inline-block; padding-bottom: 3px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -53,7 +52,6 @@ if check_password():
         hires_df = pd.read_sql('SELECT * FROM hires', conn)
         jobs_df = pd.read_sql('SELECT * FROM jobs', conn)
         
-        # Row 1: Quick Stats
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("👥 Total Talent", len(cands_df))
         m2.metric("💼 Total Jobs", len(jobs_df))
@@ -62,31 +60,27 @@ if check_password():
 
         st.divider()
         
-        # Row 2: Graph (Small & Clean)
-        col_chart, col_empty = st.columns([2, 1]) # ग्राफलाई बायाँ तिर सानो ठाउँमा राखिएको
-        
+        # Small & Professional Bar Chart
+        col_chart, col_info = st.columns([2, 1])
         with col_chart:
-            st.markdown("<p class='section-title'>📊 Experience by Candidate</p>", unsafe_allow_html=True)
+            st.markdown("<p class='section-title'>📊 Candidate Experience (Yrs)</p>", unsafe_allow_html=True)
             if not cands_df.empty:
-                # ग्राफ सानो र चिटिक्क पार्न height=250 राखिएको छ
-                fig = px.bar(cands_df, x='name', y='exp', color='skill', height=250, template="plotly_white")
-                fig.update_layout(
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    showlegend=False,
-                    xaxis_title=None,
-                    yaxis_title="Years",
-                )
-                # अनावश्यक बटनहरू हटाउन config थपिएको छ
+                fig = px.bar(cands_df, x='name', y='exp', color='skill', height=230, template="plotly_white")
+                fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False, xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             else:
-                st.info("No data yet.")
+                st.info("No data available.")
+        
+        with col_info:
+            st.markdown("<p class='section-title'>🔔 Latest Updates</p>", unsafe_allow_html=True)
+            if not hires_df.empty:
+                st.write(f"✅ **Latest Hire:** {hires_df['candidate_name'].iloc[-1]}")
+            st.write(f"🏢 **Jobs Available:** {len(jobs_df)}")
 
         st.divider()
-
-        # Row 3: Photo Gallery
         st.markdown("<p class='section-title'>👥 Talent Pool Gallery</p>", unsafe_allow_html=True)
         if not cands_df.empty:
-            cols = st.columns(6) # ६ वटा कार्ड सँगै राख्दा अझ प्रोफेसनल देखिन्छ
+            cols = st.columns(6)
             for idx, row in cands_df.iterrows():
                 with cols[idx % 6]:
                     st.markdown("<div class='candidate-card'>", unsafe_allow_html=True)
@@ -96,7 +90,6 @@ if check_password():
                     st.caption(f"🎯 {row['skill']}")
                     st.markdown("</div>", unsafe_allow_html=True)
 
-    # (बाँकी Jobs, Candidates, Hiring Sections यथावत छन्)
     elif menu == "💼 Jobs":
         st.title("💼 Manage Jobs")
         with st.form("j"):
@@ -123,3 +116,6 @@ if check_password():
                 c.execute('INSERT INTO hires (job_title, candidate_name) VALUES (?,?)', (sj, sc)); conn.commit(); st.success("Hired!")
     
     elif menu == "⚙️ Settings":
+        st.title("⚙️ Admin Settings")
+        h_df = pd.read_sql('SELECT * FROM hires', conn)
+        st.download_button("📥 Export Hiring Report", h_df.to_csv(index=False), "hires.csv", "text/csv")
