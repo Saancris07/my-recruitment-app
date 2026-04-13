@@ -13,13 +13,12 @@ st.set_page_config(page_title="TalentHub Pro", page_icon="🎯", layout="wide")
 conn = sqlite3.connect('agency_ultimate.db', check_same_thread=False)
 c = conn.cursor()
 
-# Create tables
+# Create tables with proper columns (checking existence first)
 c.execute("""CREATE TABLE IF NOT EXISTS jobs 
             (id INTEGER PRIMARY KEY, 
              title TEXT, 
              company TEXT, 
-             status TEXT,
-             posted_date TEXT)""")
+             status TEXT)""")
 
 c.execute("""CREATE TABLE IF NOT EXISTS candidates 
             (id INTEGER PRIMARY KEY, 
@@ -28,9 +27,23 @@ c.execute("""CREATE TABLE IF NOT EXISTS candidates
              phone TEXT, 
              skill TEXT, 
              exp INTEGER, 
-             c_experience TEXT,
-             status TEXT DEFAULT 'Available',
-             added_date TEXT)""")
+             c_experience TEXT)""")
+
+# Add missing columns if they don't exist (for backward compatibility)
+try:
+    c.execute("ALTER TABLE candidates ADD COLUMN status TEXT DEFAULT 'Available'")
+except sqlite3.OperationalError:
+    pass  # Column already exists
+
+try:
+    c.execute("ALTER TABLE candidates ADD COLUMN added_date TEXT")
+except sqlite3.OperationalError:
+    pass  # Column already exists
+
+try:
+    c.execute("ALTER TABLE jobs ADD COLUMN posted_date TEXT")
+except sqlite3.OperationalError:
+    pass  # Column already exists
 
 c.execute("""CREATE TABLE IF NOT EXISTS placements 
             (id INTEGER PRIMARY KEY,
@@ -40,19 +53,6 @@ c.execute("""CREATE TABLE IF NOT EXISTS placements
              status TEXT)""")
 
 conn.commit()
-
-# Initialize session state for notifications
-if 'notification' not in st.session_state:
-    st.session_state.notification = None
-
-# Helper function to show notifications
-def show_notification(message, type="success"):
-    if type == "success":
-        st.success(message)
-    elif type == "error":
-        st.error(message)
-    elif type == "info":
-        st.info(message)
 
 # Sidebar Navigation
 st.sidebar.title("🎯 TalentHub Pro")
@@ -66,15 +66,27 @@ page = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.caption("Version 1.0 | Recruitment Management System")
 
+# Helper function to get candidate count
+def get_candidate_count():
+    return c.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
+
+# Helper function to get job count
+def get_job_count():
+    return c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+
+# Helper function to get hire count
+def get_hire_count():
+    return c.execute("SELECT COUNT(*) FROM placements WHERE status='Hired'").fetchone()[0]
+
 # ==================== DASHBOARD PAGE ====================
 if page == "📊 Dashboard":
     st.title("📊 TalentHub Pro Dashboard")
     st.markdown("---")
     
     # Get metrics
-    total_candidates = c.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
-    total_jobs = c.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
-    total_hires = c.execute("SELECT COUNT(*) FROM placements WHERE status='Hired'").fetchone()[0]
+    total_candidates = get_candidate_count()
+    total_jobs = get_job_count()
+    total_hires = get_hire_count()
     
     # Display metrics in columns
     col1, col2, col3, col4 = st.columns(4)
@@ -86,7 +98,10 @@ if page == "📊 Dashboard":
     with col3:
         st.metric("✅ Total Hires", total_hires)
     with col4:
-        active_jobs = c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
+        try:
+            active_jobs = c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0]
+        except:
+            active_jobs = total_jobs
         st.metric("📌 Active Jobs", active_jobs)
     
     st.markdown("---")
@@ -94,7 +109,10 @@ if page == "📊 Dashboard":
     # Talent Pool Gallery
     st.subheader("🌟 Talent Pool Gallery")
     
-    candidates_df = pd.read_sql("SELECT name, skill, exp, status FROM candidates ORDER BY added_date DESC", conn)
+    try:
+        candidates_df = pd.read_sql("SELECT name, skill, exp FROM candidates", conn)
+    except:
+        candidates_df = pd.DataFrame()
     
     if candidates_df.empty:
         st.info("No candidates in the talent pool. Go to 'Manage Candidates' to add some!")
@@ -103,18 +121,18 @@ if page == "📊 Dashboard":
         for idx, (_, row) in enumerate(candidates_df.iterrows()):
             with cols[idx % 3]:
                 with st.container():
+                    exp_val = row['exp'] if row['exp'] else 0
                     st.markdown(f"""
                     <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
                         <h4>{row['name']}</h4>
-                        <p>🔧 {row['skill']}</p>
-                        <p>📅 {row['exp']} years exp</p>
-                        <p>🏷️ Status: {row['status']}</p>
+                        <p>🔧 {row['skill'] if row['skill'] else 'Not specified'}</p>
+                        <p>📅 {exp_val} years exp</p>
                     </div>
                     """, unsafe_allow_html=True)
                 st.markdown("---")
     
     # Experience Distribution Chart
-    if not candidates_df.empty:
+    if not candidates_df.empty and 'exp' in candidates_df.columns:
         st.subheader("📊 Experience Distribution")
         exp_fig = px.histogram(candidates_df, x='exp', title="Years of Experience Distribution", 
                                 labels={'exp': 'Years of Experience'}, color_discrete_sequence=['#FF6B6B'])
@@ -122,20 +140,23 @@ if page == "📊 Dashboard":
     
     # Recent Placements
     st.subheader("🎉 Recent Placements")
-    recent_placements = c.execute("""
-        SELECT c.name, j.title, p.placement_date 
-        FROM placements p
-        JOIN candidates c ON p.candidate_id = c.id
-        JOIN jobs j ON p.job_id = j.id
-        WHERE p.status='Hired'
-        ORDER BY p.placement_date DESC
-        LIMIT 5
-    """).fetchall()
-    
-    if recent_placements:
-        for placement in recent_placements:
-            st.write(f"✅ **{placement[0]}** placed as **{placement[1]}** on {placement[2]}")
-    else:
+    try:
+        recent_placements = c.execute("""
+            SELECT c.name, j.title, p.placement_date 
+            FROM placements p
+            JOIN candidates c ON p.candidate_id = c.id
+            JOIN jobs j ON p.job_id = j.id
+            WHERE p.status='Hired'
+            ORDER BY p.placement_date DESC
+            LIMIT 5
+        """).fetchall()
+        
+        if recent_placements:
+            for placement in recent_placements:
+                st.write(f"✅ **{placement[0]}** placed as **{placement[1]}** on {placement[2]}")
+        else:
+            st.info("No placements yet. Go to 'Placements' to hire candidates!")
+    except:
         st.info("No placements yet. Go to 'Placements' to hire candidates!")
 
 # ==================== MANAGE CANDIDATES PAGE ====================
@@ -159,17 +180,15 @@ elif page == "👥 Manage Candidates":
             
             with col2:
                 exp = st.number_input("Years of Experience", min_value=0, step=1)
-                status = st.selectbox("Status", ["Available", "Interviewing", "Placed", "On Hold"])
                 c_experience = st.text_area("Previous Experience Details")
             
             submitted = st.form_submit_button("💾 Save Candidate")
             
             if submitted:
                 if name and email:
-                    added_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    c.execute("""INSERT INTO candidates (name, email, phone, skill, exp, c_experience, status, added_date)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", 
-                              (name, email, phone, skill, exp, c_experience, status, added_date))
+                    c.execute("""INSERT INTO candidates (name, email, phone, skill, exp, c_experience)
+                                VALUES (?, ?, ?, ?, ?, ?)""", 
+                              (name, email, phone, skill, exp, c_experience))
                     conn.commit()
                     st.success(f"✅ {name} added successfully!")
                     st.rerun()
@@ -180,7 +199,10 @@ elif page == "👥 Manage Candidates":
     with tab2:
         st.subheader("All Candidates")
         
-        candidates_df = pd.read_sql("SELECT id, name, email, phone, skill, exp, status, added_date FROM candidates ORDER BY added_date DESC", conn)
+        try:
+            candidates_df = pd.read_sql("SELECT id, name, email, phone, skill, exp FROM candidates ORDER BY id DESC", conn)
+        except:
+            candidates_df = pd.DataFrame()
         
         if candidates_df.empty:
             st.info("No candidates found. Add some candidates in the 'Add Candidate' tab!")
@@ -202,7 +224,7 @@ elif page == "👥 Manage Candidates":
     with tab3:
         st.subheader("Edit or Delete Candidates")
         
-        candidates_list = c.execute("SELECT id, name, skill, status FROM candidates ORDER BY name").fetchall()
+        candidates_list = c.execute("SELECT id, name, skill FROM candidates ORDER BY name").fetchall()
         
         if candidates_list:
             candidate_options = {f"{c[1]} (ID: {c[0]})": c[0] for c in candidates_list}
@@ -223,8 +245,6 @@ elif page == "👥 Manage Candidates":
                 
                 with col2:
                     edit_exp = st.number_input("Experience (Years)", value=candidate_data[5] if candidate_data[5] else 0)
-                    edit_status = st.selectbox("Status", ["Available", "Interviewing", "Placed", "On Hold"], 
-                                               index=["Available", "Interviewing", "Placed", "On Hold"].index(candidate_data[7] if candidate_data[7] else "Available"))
                     edit_experience = st.text_area("Experience Details", candidate_data[6] if candidate_data[6] else "")
                 
                 col_btn1, col_btn2 = st.columns(2)
@@ -232,9 +252,9 @@ elif page == "👥 Manage Candidates":
                 with col_btn1:
                     if st.button("💾 Update Candidate"):
                         c.execute("""UPDATE candidates 
-                                    SET name=?, email=?, phone=?, skill=?, exp=?, c_experience=?, status=?
+                                    SET name=?, email=?, phone=?, skill=?, exp=?, c_experience=?
                                     WHERE id=?""",
-                                  (edit_name, edit_email, edit_phone, edit_skill, edit_exp, edit_experience, edit_status, candidate_id))
+                                  (edit_name, edit_email, edit_phone, edit_skill, edit_exp, edit_experience, candidate_id))
                         conn.commit()
                         st.success("✅ Candidate updated successfully!")
                         st.rerun()
@@ -273,9 +293,8 @@ elif page == "💼 Manage Jobs":
             
             if submitted:
                 if title and company:
-                    posted_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    c.execute("INSERT INTO jobs (title, company, status, posted_date) VALUES (?, ?, ?, ?)",
-                              (title, company, status, posted_date))
+                    c.execute("INSERT INTO jobs (title, company, status) VALUES (?, ?, ?)",
+                              (title, company, status))
                     conn.commit()
                     st.success(f"✅ Job '{title}' posted successfully!")
                     st.rerun()
@@ -286,7 +305,10 @@ elif page == "💼 Manage Jobs":
     with tab2:
         st.subheader("All Jobs")
         
-        jobs_df = pd.read_sql("SELECT id, title, company, status, posted_date FROM jobs ORDER BY posted_date DESC", conn)
+        try:
+            jobs_df = pd.read_sql("SELECT id, title, company, status FROM jobs ORDER BY id DESC", conn)
+        except:
+            jobs_df = pd.DataFrame()
         
         if jobs_df.empty:
             st.info("No jobs found. Post some jobs in the 'Post Job' tab!")
@@ -315,7 +337,7 @@ elif page == "💼 Manage Jobs":
                 edit_title = st.text_input("Job Title", job_data[1])
                 edit_company = st.text_input("Company", job_data[2])
                 edit_status = st.selectbox("Status", ["Open", "Closed", "On Hold"], 
-                                          index=["Open", "Closed", "On Hold"].index(job_data[3]))
+                                          index=["Open", "Closed", "On Hold"].index(job_data[3]) if job_data[3] in ["Open", "Closed", "On Hold"] else 0)
                 
                 col1, col2 = st.columns(2)
                 
@@ -346,14 +368,14 @@ elif page == "🤝 Placements":
     
     with col1:
         st.subheader("Available Candidates")
-        available_candidates = c.execute("SELECT id, name, skill, exp FROM candidates WHERE status='Available'").fetchall()
+        available_candidates = c.execute("SELECT id, name, skill, exp FROM candidates").fetchall()
         
         if available_candidates:
             candidate_choices = {f"{c[1]} - {c[2]} ({c[3]} yrs)": c[0] for c in available_candidates}
             selected_candidate = st.selectbox("Select Candidate", list(candidate_choices.keys()))
             candidate_id = candidate_choices[selected_candidate]
         else:
-            st.info("No available candidates")
+            st.info("No candidates available")
             candidate_id = None
     
     with col2:
@@ -373,7 +395,6 @@ elif page == "🤝 Placements":
             placement_date = datetime.datetime.now().strftime("%Y-%m-%d")
             c.execute("INSERT INTO placements (candidate_id, job_id, placement_date, status) VALUES (?, ?, ?, ?)",
                       (candidate_id, job_id, placement_date, "Hired"))
-            c.execute("UPDATE candidates SET status='Placed' WHERE id=?", (candidate_id,))
             conn.commit()
             st.success("🎉 Candidate placed successfully!")
             st.rerun()
@@ -381,18 +402,21 @@ elif page == "🤝 Placements":
     st.markdown("---")
     st.subheader("📋 Placement History")
     
-    placements_df = pd.read_sql("""
-        SELECT p.id, c.name as candidate, j.title as job, j.company, p.placement_date, p.status
-        FROM placements p
-        JOIN candidates c ON p.candidate_id = c.id
-        JOIN jobs j ON p.job_id = j.id
-        ORDER BY p.placement_date DESC
-    """, conn)
-    
-    if placements_df.empty:
+    try:
+        placements_df = pd.read_sql("""
+            SELECT p.id, c.name as candidate, j.title as job, j.company, p.placement_date, p.status
+            FROM placements p
+            JOIN candidates c ON p.candidate_id = c.id
+            JOIN jobs j ON p.job_id = j.id
+            ORDER BY p.placement_date DESC
+        """, conn)
+        
+        if placements_df.empty:
+            st.info("No placements yet")
+        else:
+            st.dataframe(placements_df, use_container_width=True, hide_index=True)
+    except:
         st.info("No placements yet")
-    else:
-        st.dataframe(placements_df, use_container_width=True, hide_index=True)
 
 # ==================== ANALYTICS PAGE ====================
 elif page == "📈 Analytics":
@@ -400,43 +424,53 @@ elif page == "📈 Analytics":
     st.markdown("---")
     
     # Get data for analytics
-    candidates_df = pd.read_sql("SELECT skill, exp, status, added_date FROM candidates", conn)
-    jobs_df = pd.read_sql("SELECT status, posted_date FROM jobs", conn)
-    placements_df = pd.read_sql("SELECT placement_date FROM placements", conn)
+    try:
+        candidates_df = pd.read_sql("SELECT skill, exp FROM candidates", conn)
+    except:
+        candidates_df = pd.DataFrame()
+    
+    try:
+        jobs_df = pd.read_sql("SELECT status FROM jobs", conn)
+    except:
+        jobs_df = pd.DataFrame()
+    
+    try:
+        placements_df = pd.read_sql("SELECT placement_date FROM placements", conn)
+    except:
+        placements_df = pd.DataFrame()
     
     col1, col2 = st.columns(2)
     
     with col1:
         # Skills distribution
-        if not candidates_df.empty:
+        if not candidates_df.empty and 'skill' in candidates_df.columns:
             st.subheader("Top Skills in Talent Pool")
             skill_counts = candidates_df['skill'].value_counts().head(10)
-            fig_skills = px.bar(x=skill_counts.values, y=skill_counts.index, orientation='h',
-                                title="Most Common Skills", labels={'x': 'Count', 'y': 'Skill'})
-            st.plotly_chart(fig_skills, use_container_width=True)
+            if not skill_counts.empty:
+                fig_skills = px.bar(x=skill_counts.values, y=skill_counts.index, orientation='h',
+                                    title="Most Common Skills", labels={'x': 'Count', 'y': 'Skill'})
+                st.plotly_chart(fig_skills, use_container_width=True)
+            else:
+                st.info("No skill data available")
         else:
             st.info("No candidate data available")
     
     with col2:
-        # Candidate status distribution
-        if not candidates_df.empty:
-            st.subheader("Candidate Status Overview")
-            status_counts = candidates_df['status'].value_counts()
-            fig_status = px.pie(values=status_counts.values, names=status_counts.index, title="Candidate Status")
-            st.plotly_chart(fig_status, use_container_width=True)
+        # Experience distribution
+        if not candidates_df.empty and 'exp' in candidates_df.columns:
+            st.subheader("Experience Level Distribution")
+            candidates_df['exp_level'] = pd.cut(candidates_df['exp'], 
+                                                bins=[0, 2, 5, 10, 100], 
+                                                labels=['Junior (0-2)', 'Mid (3-5)', 'Senior (6-10)', 'Expert (10+)'])
+            exp_levels = candidates_df['exp_level'].value_counts()
+            if not exp_levels.empty:
+                fig_exp = px.bar(x=exp_levels.index, y=exp_levels.values, title="Experience Levels",
+                                 color=exp_levels.index, labels={'x': 'Level', 'y': 'Number of Candidates'})
+                st.plotly_chart(fig_exp, use_container_width=True)
+            else:
+                st.info("No experience data available")
         else:
-            st.info("No candidate data available")
-    
-    # Experience level distribution
-    if not candidates_df.empty:
-        st.subheader("Experience Level Distribution")
-        candidates_df['exp_level'] = pd.cut(candidates_df['exp'], 
-                                            bins=[0, 2, 5, 10, 100], 
-                                            labels=['Junior (0-2)', 'Mid (3-5)', 'Senior (6-10)', 'Expert (10+)'])
-        exp_levels = candidates_df['exp_level'].value_counts()
-        fig_exp = px.bar(x=exp_levels.index, y=exp_levels.values, title="Experience Levels",
-                         color=exp_levels.index, labels={'x': 'Level', 'y': 'Number of Candidates'})
-        st.plotly_chart(fig_exp, use_container_width=True)
+            st.info("No experience data available")
     
     # Job stats
     if not jobs_df.empty:
@@ -465,10 +499,6 @@ elif page == "📈 Analytics":
         st.progress(success_rate / 100)
     else:
         st.info("Add candidates to see placement metrics")
-
-# Close database connection
-# Note: Don't close here if you want the app to keep running
-# The connection will be closed when the app stops
 
 st.markdown("---")
 st.caption("© 2024 TalentHub Pro | Recruitment Management System")
