@@ -11,22 +11,47 @@ st.set_page_config(page_title="TalentHub Pro", page_icon="🎯", layout="wide")
 conn = sqlite3.connect('agency_ultimate.db', check_same_thread=False)
 c = conn.cursor()
 
-# Create tables
+# Check existing columns and add missing ones
+c.execute("PRAGMA table_info(candidates)")
+existing_columns = [column[1] for column in c.fetchall()]
+
+# Add missing columns if they don't exist
+if 'phone' not in existing_columns:
+    try:
+        c.execute("ALTER TABLE candidates ADD COLUMN phone TEXT")
+        st.success("✅ Added 'phone' column to database")
+    except:
+        pass
+
+if 'status' not in existing_columns:
+    try:
+        c.execute("ALTER TABLE candidates ADD COLUMN status TEXT DEFAULT 'Available'")
+    except:
+        pass
+
+if 'added_date' not in existing_columns:
+    try:
+        c.execute("ALTER TABLE candidates ADD COLUMN added_date TEXT")
+    except:
+        pass
+
+# Create jobs table if not exists
 c.execute("""CREATE TABLE IF NOT EXISTS jobs 
             (id INTEGER PRIMARY KEY, 
              title TEXT, 
              company TEXT, 
              status TEXT)""")
 
-c.execute("""CREATE TABLE IF NOT EXISTS candidates 
-            (id INTEGER PRIMARY KEY, 
-             name TEXT, 
-             email TEXT, 
-             phone TEXT, 
-             skill TEXT, 
-             exp INTEGER, 
-             c_experience TEXT)""")
+# Add posted_date to jobs if missing
+c.execute("PRAGMA table_info(jobs)")
+job_columns = [column[1] for column in c.fetchall()]
+if 'posted_date' not in job_columns:
+    try:
+        c.execute("ALTER TABLE jobs ADD COLUMN posted_date TEXT")
+    except:
+        pass
 
+# Create placements table
 c.execute("""CREATE TABLE IF NOT EXISTS placements 
             (id INTEGER PRIMARY KEY,
              candidate_id INTEGER,
@@ -137,20 +162,21 @@ elif page == "👥 Manage Candidates":
             col1, col2 = st.columns(2)
             
             with col1:
-                candidate_name = st.text_input("Full Name *", key="cand_name")
-                candidate_email = st.text_input("Email *", key="cand_email")
-                candidate_phone = st.text_input("Phone", key="cand_phone")
-                candidate_skill = st.text_input("Primary Skill", key="cand_skill")
+                candidate_name = st.text_input("Full Name *")
+                candidate_email = st.text_input("Email *")
+                candidate_phone = st.text_input("Phone (Optional)")
+                candidate_skill = st.text_input("Primary Skill")
             
             with col2:
-                candidate_exp = st.number_input("Years of Experience", min_value=0, step=1, key="cand_exp")
-                candidate_experience = st.text_area("Previous Experience Details", key="cand_exp_details")
+                candidate_exp = st.number_input("Years of Experience", min_value=0, step=1)
+                candidate_experience = st.text_area("Previous Experience Details")
             
             submitted = st.form_submit_button("💾 Save Candidate")
             
             if submitted:
                 if candidate_name and candidate_email:
                     try:
+                        # Insert with phone column (now it exists)
                         c.execute("""INSERT INTO candidates (name, email, phone, skill, exp, c_experience)
                                     VALUES (?, ?, ?, ?, ?, ?)""", 
                                   (candidate_name, candidate_email, candidate_phone, 
@@ -167,13 +193,21 @@ elif page == "👥 Manage Candidates":
     with tab2:
         st.subheader("All Candidates")
         
-        candidates_list = c.execute("SELECT id, name, email, phone, skill, exp FROM candidates ORDER BY id DESC").fetchall()
+        # Check what columns are available for display
+        c.execute("PRAGMA table_info(candidates)")
+        cols = [col[1] for col in c.fetchall()]
+        
+        if 'phone' in cols:
+            candidates_list = c.execute("SELECT id, name, email, phone, skill, exp FROM candidates ORDER BY id DESC").fetchall()
+            columns = ['ID', 'Name', 'Email', 'Phone', 'Skill', 'Experience']
+        else:
+            candidates_list = c.execute("SELECT id, name, email, skill, exp FROM candidates ORDER BY id DESC").fetchall()
+            columns = ['ID', 'Name', 'Email', 'Skill', 'Experience']
         
         if not candidates_list:
             st.info("No candidates found. Add some candidates in the 'Add Candidate' tab!")
         else:
-            # Convert to DataFrame for display
-            candidates_df = pd.DataFrame(candidates_list, columns=['ID', 'Name', 'Email', 'Phone', 'Skill', 'Experience'])
+            candidates_df = pd.DataFrame(candidates_list, columns=columns)
             
             # Search filter
             search = st.text_input("🔍 Search candidates by name or skill")
@@ -208,22 +242,33 @@ elif page == "👥 Manage Candidates":
                 with col1:
                     edit_name = st.text_input("Name", candidate_data[1])
                     edit_email = st.text_input("Email", candidate_data[2])
-                    edit_phone = st.text_input("Phone", candidate_data[3] if candidate_data[3] else "")
-                    edit_skill = st.text_input("Skill", candidate_data[4] if candidate_data[4] else "")
-                
-                with col2:
-                    edit_exp = st.number_input("Experience (Years)", value=candidate_data[5] if candidate_data[5] else 0)
-                    edit_experience = st.text_area("Experience Details", candidate_data[6] if candidate_data[6] else "")
+                    
+                    # Check if phone column exists
+                    if len(candidate_data) > 3:
+                        edit_phone = st.text_input("Phone", candidate_data[3] if candidate_data[3] else "")
+                        edit_skill = st.text_input("Skill", candidate_data[4] if candidate_data[4] else "")
+                        edit_exp = st.number_input("Experience (Years)", value=candidate_data[5] if candidate_data[5] else 0)
+                        edit_experience = st.text_area("Experience Details", candidate_data[6] if len(candidate_data) > 6 and candidate_data[6] else "")
+                    else:
+                        edit_skill = st.text_input("Skill", candidate_data[3] if candidate_data[3] else "")
+                        edit_exp = st.number_input("Experience (Years)", value=candidate_data[4] if candidate_data[4] else 0)
+                        edit_experience = st.text_area("Experience Details", candidate_data[5] if len(candidate_data) > 5 and candidate_data[5] else "")
                 
                 col_btn1, col_btn2 = st.columns(2)
                 
                 with col_btn1:
                     if st.button("💾 Update Candidate"):
                         try:
-                            c.execute("""UPDATE candidates 
-                                        SET name=?, email=?, phone=?, skill=?, exp=?, c_experience=?
-                                        WHERE id=?""",
-                                      (edit_name, edit_email, edit_phone, edit_skill, edit_exp, edit_experience, candidate_id))
+                            if 'phone' in existing_columns:
+                                c.execute("""UPDATE candidates 
+                                            SET name=?, email=?, phone=?, skill=?, exp=?, c_experience=?
+                                            WHERE id=?""",
+                                          (edit_name, edit_email, edit_phone, edit_skill, edit_exp, edit_experience, candidate_id))
+                            else:
+                                c.execute("""UPDATE candidates 
+                                            SET name=?, email=?, skill=?, exp=?, c_experience=?
+                                            WHERE id=?""",
+                                          (edit_name, edit_email, edit_skill, edit_exp, edit_experience, candidate_id))
                             conn.commit()
                             st.success("✅ Candidate updated successfully!")
                             st.rerun()
