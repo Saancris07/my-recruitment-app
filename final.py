@@ -34,14 +34,13 @@ def password_entered():
 if check_password():
     st.set_page_config(page_title="TalentHub Ultimate", layout="wide")
     
-    # Advanced Professional CSS
+    # Custom CSS for Professional Look
     st.markdown("""
         <style>
-        .main { background-color: #f4f7f6; }
-        .stMetric { background-color: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid #007bff; }
-        .candidate-card { background-color: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); text-align: center; border: 1px solid #eee; transition: 0.3s; }
-        .candidate-card:hover { transform: translateY(-5px); box-shadow: 0 6px 15px rgba(0,0,0,0.12); }
-        .section-title { color: #1e293b; font-weight: bold; border-bottom: 2px solid #007bff; padding-bottom: 5px; margin-bottom: 20px; }
+        .main { background-color: #f8f9fa; }
+        .stMetric { background-color: white; padding: 15px; border-radius: 10px; border-left: 5px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .candidate-card { background-color: white; padding: 10px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); text-align: center; border: 1px solid #eee; }
+        .section-title { color: #333; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -49,46 +48,47 @@ if check_password():
     menu = st.sidebar.radio("मुख्य मेनु", ["📊 Dashboard", "💼 Jobs", "👤 Candidates", "🎯 Hiring", "⚙️ Settings"])
 
     if menu == "📊 Dashboard":
-        st.title("📈 Recruitment Analytics")
+        st.title("📈 Recruitment Overview")
         cands_df = pd.read_sql('SELECT * FROM candidates', conn)
         hires_df = pd.read_sql('SELECT * FROM hires', conn)
         jobs_df = pd.read_sql('SELECT * FROM jobs', conn)
         
-        # Row 1: Metrics
+        # Row 1: Quick Stats
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("👥 Total Talent", len(cands_df))
         m2.metric("💼 Total Jobs", len(jobs_df))
         m3.metric("🎯 Total Hires", len(hires_df))
-        m4.metric("📈 Status", "Active", "Live")
+        m4.metric("📈 Status", "Active")
 
         st.divider()
         
-        # Row 2: Graph and Stats
-        col_graph, col_info = st.columns([2, 1]) # ग्राफलाई २ भाग र जानकारीलाई १ भाग
+        # Row 2: Graph (Small & Clean)
+        col_chart, col_empty = st.columns([2, 1]) # ग्राफलाई बायाँ तिर सानो ठाउँमा राखिएको
         
-        with col_graph:
-            st.markdown("<h3 class='section-title'>📊 Experience Distribution</h3>", unsafe_allow_html=True)
+        with col_chart:
+            st.markdown("<p class='section-title'>📊 Experience by Candidate</p>", unsafe_allow_html=True)
             if not cands_df.empty:
-                fig = px.bar(cands_df, x='name', y='exp', color='skill', barmode='group', height=350)
-                fig.update_layout(margin=dict(l=20, r=20, t=20, b=20), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig, use_container_width=True)
+                # ग्राफ सानो र चिटिक्क पार्न height=250 राखिएको छ
+                fig = px.bar(cands_df, x='name', y='exp', color='skill', height=250, template="plotly_white")
+                fig.update_layout(
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    showlegend=False,
+                    xaxis_title=None,
+                    yaxis_title="Years",
+                )
+                # अनावश्यक बटनहरू हटाउन config थपिएको छ
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             else:
-                st.info("डाटा उपलब्ध छैन।")
-
-        with col_info:
-            st.markdown("<h3 class='section-title'>🔔 Quick Stats</h3>", unsafe_allow_html=True)
-            st.write(f"✅ **Latest Hire:** {hires_df['candidate_name'].iloc[-1] if not hires_df.empty else 'None'}")
-            st.write(f"🏢 **Top Company:** {jobs_df['company'].mode()[0] if not jobs_df.empty else 'None'}")
-            st.write(f"⭐ **Lead Skill:** {cands_df['skill'].mode()[0] if not cands_df.empty else 'None'}")
+                st.info("No data yet.")
 
         st.divider()
 
-        # Row 3: Candidate Grid
-        st.markdown("<h3 class='section-title'>👥 Talent Pool Gallery</h3>", unsafe_allow_html=True)
+        # Row 3: Photo Gallery
+        st.markdown("<p class='section-title'>👥 Talent Pool Gallery</p>", unsafe_allow_html=True)
         if not cands_df.empty:
-            cols = st.columns(5) # ५ वटा सानो सानो कार्ड एकै ठाउँमा
+            cols = st.columns(6) # ६ वटा कार्ड सँगै राख्दा अझ प्रोफेसनल देखिन्छ
             for idx, row in cands_df.iterrows():
-                with cols[idx % 5]:
+                with cols[idx % 6]:
                     st.markdown("<div class='candidate-card'>", unsafe_allow_html=True)
                     if row['photo']:
                         st.image(Image.open(io.BytesIO(row['photo'])), use_container_width=True)
@@ -96,7 +96,7 @@ if check_password():
                     st.caption(f"🎯 {row['skill']}")
                     st.markdown("</div>", unsafe_allow_html=True)
 
-    # (Jobs, Candidates, Hiring Sections remain same)
+    # (बाँकी Jobs, Candidates, Hiring Sections यथावत छन्)
     elif menu == "💼 Jobs":
         st.title("💼 Manage Jobs")
         with st.form("j"):
@@ -123,6 +123,3 @@ if check_password():
                 c.execute('INSERT INTO hires (job_title, candidate_name) VALUES (?,?)', (sj, sc)); conn.commit(); st.success("Hired!")
     
     elif menu == "⚙️ Settings":
-        st.title("⚙️ Admin")
-        h_df = pd.read_sql('SELECT * FROM hires', conn)
-        st.download_button("📥 Export Report", h_df.to_csv(index=False), "hires.csv")
