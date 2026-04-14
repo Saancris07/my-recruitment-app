@@ -2,31 +2,46 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# --- 1. THEME & STYLING ---
+# --- 1. NEW BLUE & WHITE THEME ---
 st.set_page_config(page_title="TalentHub Pro", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #121212; color: white; }
-    [data-testid="stSidebar"] { background-color: #1E1E1E; }
+    /* Main Background: Deep Blue */
+    .stApp { background-color: #003366; color: white; }
+    
+    /* Sidebar: Slightly Darker Blue */
+    [data-testid="stSidebar"] { background-color: #002244; }
+    
+    /* Job Cards: Soft Blue with White Border */
     .job-card {
-        background-color: #1E1E1E; padding: 20px; border-radius: 15px;
-        border-left: 5px solid #FFC107; margin-bottom: 10px;
+        background-color: #004080; padding: 20px; border-radius: 15px;
+        border-left: 5px solid #FFFFFF; margin-bottom: 10px;
+        color: white;
     }
-    .main-title { font-size: 32px; font-weight: 800; color: #FFC107; }
+    
+    /* Main Title & Text: Pure White */
+    .main-title { font-size: 32px; font-weight: 800; color: #FFFFFF; }
+    p, h1, h2, h3, span, label { color: white !important; }
+    
+    /* Buttons: White with Blue Text */
     div.stButton > button {
-        background-color: #FFC107; color: black; border-radius: 10px;
+        background-color: #FFFFFF; color: #003366; border-radius: 10px;
         font-weight: bold; width: 100%; border: none;
+    }
+    
+    /* Input field borders for visibility */
+    .stTextInput>div>div>input {
+        background-color: #004080; color: white; border: 1px solid #FFFFFF;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATABASE INITIALIZATION (This fixes your error) ---
+# --- 2. DATABASE INITIALIZATION ---
 conn = sqlite3.connect('recruitment.db', check_same_thread=False)
 c = conn.cursor()
 
 def init_db():
-    # Ensures the 'Jobs' table exists before we try to insert data
     c.execute('''CREATE TABLE IF NOT EXISTS Jobs 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, company TEXT, pay TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS Candidates 
@@ -42,7 +57,6 @@ page = st.sidebar.radio("Menu", ["Find Jobs", "Manage Candidates"])
 if page == "Find Jobs":
     st.markdown('<p class="main-title">Job Management</p>', unsafe_allow_html=True)
     
-    # Post Job Form
     with st.form("job_form", clear_on_submit=True):
         t = st.text_input("Job Title")
         co = st.text_input("Company")
@@ -55,14 +69,13 @@ if page == "Find Jobs":
 
     st.write("---")
     
-    # Display Jobs with Delete Buttons
     jobs = c.execute("SELECT id, title, company, pay FROM Jobs").fetchall()
     for j_id, j_title, j_co, j_pay in jobs:
         col1, col2 = st.columns([0.85, 0.15])
         with col1:
             st.markdown(f"""<div class="job-card"><h3>{j_title}</h3><p>{j_co} • {j_pay}</p></div>""", unsafe_allow_html=True)
         with col2:
-            st.write(" ") # Spacer
+            st.write(" ") 
             if st.button("🗑️", key=f"del_j_{j_id}"):
                 c.execute("DELETE FROM Jobs WHERE id=?", (j_id,))
                 conn.commit()
@@ -70,17 +83,16 @@ if page == "Find Jobs":
 
 # --- 5. PAGE: MANAGE CANDIDATES ---
 elif page == "Manage Candidates":
-    st.markdown('<p class="main-title">Candidates</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-title">Manage Applicants</p>', unsafe_allow_html=True)
     
     with st.form("cand_form", clear_on_submit=True):
-        n = st.text_input("Name")
-        r = st.text_input("Role")
+        n = st.text_input("Candidate Name")
+        r = st.text_input("Target Role")
         if st.form_submit_button("Add Candidate"):
             c.execute("INSERT INTO Candidates (name, role) VALUES (?, ?)", (n, r))
             conn.commit()
             st.rerun()
 
-    # Display Candidates with Delete
     candidates = c.execute("SELECT id, name, role FROM Candidates").fetchall()
     for c_id, c_name, c_role in candidates:
         col1, col2 = st.columns([0.85, 0.15])
