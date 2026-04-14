@@ -1,4 +1,50 @@
 import streamlit as st
+
+# --- CUSTOM CSS FOR DRIBBBLE LOOK ---
+st.markdown("""
+    <style>
+    /* Main Background */
+    .stApp {
+        background-color: #FDFDFD;
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #1E1E1E;
+        color: white;
+    }
+    
+    /* The "Let's Find Perfect Match" style cards */
+    .stButton>button {
+        background-color: #FFC107; /* Dribbble Yellow */
+        color: black;
+        border-radius: 15px;
+        border: none;
+        font-weight: bold;
+        height: 3em;
+        width: 100%;
+    }
+    
+    /* Metric Card Styling */
+    div[data-testid="stMetric"] {
+        background-color: #FFC107;
+        padding: 15px;
+        border-radius: 20px;
+        color: black !important;
+    }
+    
+    /* Profile Header Styling */
+    .header-text {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1E1E1E;
+    }
+    </style>
+    """, unsafe_allow_index=True)
+
+# --- APP CONTENT ---
+st.markdown('<p class="header-text">Let\'s Find <br>Perfect Match</p>', unsafe_allow_html=True)
+import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
