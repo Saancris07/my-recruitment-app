@@ -2,47 +2,35 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# --- 1. BLUE & WHITE THEME SETUP ---
+# --- 1. BLUE & WHITE THEME ---
 st.set_page_config(page_title="TalentHub Pro", layout="wide")
 
 st.markdown("""
     <style>
-    /* Main Background: Deep Blue */
     .stApp { background-color: #003366; color: white; }
-    
-    /* Sidebar: Darker Blue */
     [data-testid="stSidebar"] { background-color: #001A33; }
-    
-    /* Job Cards: Soft Blue with White Accent */
     .job-card {
         background-color: #004080; padding: 20px; border-radius: 15px;
-        border-left: 5px solid #FFFFFF; margin-bottom: 10px;
-        color: white;
+        border-left: 5px solid #FFFFFF; margin-bottom: 10px; color: white;
     }
-    
-    /* Force all text to White */
     .main-title { font-size: 32px; font-weight: 800; color: #FFFFFF; }
     p, h1, h2, h3, span, label, .stMetric { color: white !important; }
-    
-    /* Buttons: White with Blue Text */
     div.stButton > button {
         background-color: #FFFFFF; color: #003366; border-radius: 10px;
         font-weight: bold; width: 100%; border: none;
     }
-    
-    /* Input field styling for visibility */
     .stTextInput>div>div>input {
         background-color: #002244; color: white; border: 1px solid #FFFFFF;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATABASE INITIALIZATION (Fixes your error) ---
+# --- 2. DATABASE INITIALIZATION (Fixes line 67 error) ---
 conn = sqlite3.connect('recruitment.db', check_same_thread=False)
 c = conn.cursor()
 
 def init_db():
-    # This creates the table if it's missing on the Streamlit server
+    # This creates the table automatically if it's missing
     c.execute('''CREATE TABLE IF NOT EXISTS Jobs 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, company TEXT, pay TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS Candidates 
@@ -51,7 +39,7 @@ def init_db():
 
 init_db()
 
-# --- 3. SIDEBAR NAVIGATION ---
+# --- 3. NAVIGATION ---
 page = st.sidebar.radio("Menu", ["Find Jobs", "Manage Candidates"])
 
 # --- 4. PAGE: FIND JOBS ---
@@ -70,7 +58,7 @@ if page == "Find Jobs":
 
     st.write("---")
     
-    # Fetch and display jobs
+    # Display Jobs with Delete Buttons
     jobs = c.execute("SELECT id, title, company, pay FROM Jobs").fetchall()
     for j_id, j_title, j_co, j_pay in jobs:
         col1, col2 = st.columns([0.85, 0.15])
@@ -82,7 +70,7 @@ if page == "Find Jobs":
                 </div>
             """, unsafe_allow_html=True)
         with col2:
-            st.write("") # Spacer
+            st.write("") 
             if st.button("🗑️", key=f"del_j_{j_id}"):
                 c.execute("DELETE FROM Jobs WHERE id=?", (j_id,))
                 conn.commit()
